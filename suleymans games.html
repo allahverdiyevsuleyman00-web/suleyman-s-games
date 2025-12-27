@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🎮 Suleyman's New Year Games</title>
+<style>
+body {
+    margin:0;
+    font-family: Arial, sans-serif;
+    background: linear-gradient(#001122,#003366);
+    color:#fff;
+    text-align:center;
+    overflow:hidden;
+}
+header h1 {
+    color:#00ffcc;
+    margin-bottom:10px;
+}
+button {
+    margin:10px;
+    padding:12px 20px;
+    font-size:16px;
+    border:none;
+    border-radius:8px;
+    cursor:pointer;
+    background:#00ffcc;
+    color:#000;
+}
+button:hover { background:#00ccaa; }
+canvas {
+    display:block;
+    margin: 20px auto;
+    border:3px solid #fff;
+}
+#scoreboard { margin-top:10px; font-size:18px; }
+</style>
+</head>
+<body>
+
+<!-- LANDING PAGE -->
+<div id="landingPage">
+    <h1>🎉 Welcome to Suleyman's Games!</h1>
+    <p>🎊 Happy New Year! Enjoy your games! 🎊</p>
+    <button onclick="showGamesPage()">Play Games</button>
+</div>
+
+<!-- GAME SELECTION PAGE -->
+<div id="gamesPage" style="display:none;">
+    <h1>🎮 Choose Your Game</h1>
+    <button onclick="startGame('dodge')">🟦 Dodge the Blocks</button>
+    <button onclick="startGame('catch')">🪙 Catch the Coins</button>
+</div>
+
+<!-- GAME PAGE -->
+<div id="gameContainer" style="display:none;">
+    <canvas id="gameCanvas" width="400" height="400"></canvas>
+    <div id="scoreboard">Score: <span id="score">0</span> | High Score: <span id="highScore">0</span></div>
+    <button onclick="backToGames()">⬅️ Back to Games</button>
+</div>
+
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const scoreEl = document.getElementById('score');
+const highScoreEl = document.getElementById('highScore');
+
+let currentGame = null;
+let score = 0, highScore = 0;
+let keyListener = null;
+let gameLoopId = null;
+
+// ----------------- Pages -----------------
+function showGamesPage(){
+    document.getElementById('landingPage').style.display='none';
+    document.getElementById('gamesPage').style.display='block';
+}
+function startGame(game){
+    document.getElementById('gamesPage').style.display='none';
+    document.getElementById('gameContainer').style.display='block';
+    showGame(game);
+}
+function backToGames(){
+    cancelAnimationFrame(gameLoopId);
+    removeKeyListener();
+    document.getElementById('gameContainer').style.display='none';
+    document.getElementById('gamesPage').style.display='block';
+}
+
+// ----------------- Game Switcher -----------------
+function showGame(game){
+    currentGame = game;
+    score = 0;
+    removeKeyListener();
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+
+    if(game==='dodge'){ initDodge(); highScore = localStorage.getItem("dodgeHighScore")||0; }
+    else if(game==='catch'){ initCatch(); highScore = localStorage.getItem("catchHighScore")||0; }
+
+    scoreEl.textContent = score;
+    highScoreEl.textContent = highScore;
+}
+
+// ----------------- Helper -----------------
+function removeKeyListener(){
+    if(keyListener) document.removeEventListener("keydown", keyListener);
+    keyListener = null;
+}
+
+// ----------------- Snow -----------------
+let snowflakes = Array.from({length:50}, ()=>({x:Math.random()*400, y:Math.random()*400, r:Math.random()*2+1, dy:Math.random()*0.5+0.3}));
+function drawSnow(){
+    ctx.fillStyle='white';
+    snowflakes.forEach(f=>{
+        ctx.beginPath();
+        ctx.arc(f.x,f.y,f.r,0,Math.PI*2);
+        ctx.fill();
+        f.y += f.dy;
+        if(f.y>canvas.height) f.y=0;
+    });
+}
+
+// ----------------- DODGE THE BLOCKS -----------------
+let player, blocks, blockSpeed, dodgeGameOver;
+function initDodge(){
+    player={x:180,y:360,size:40};
+    blocks=[];
+    blockSpeed=2;
+    dodgeGameOver=false;
+
+    keyListener = function(e){
+        if(e.key==="ArrowLeft") player.x -= 8;
+        if(e.key==="ArrowRight") player.x += 8;
+        if(player.x<0) player.x=0;
+        if(player.x>canvas.width-player.size) player.x=canvas.width-player.size;
+    };
+    document.addEventListener("keydown", keyListener);
+
+    gameLoopId = requestAnimationFrame(loopDodge);
+}
+
+function loopDodge(){
+    if(currentGame!=='dodge') return;
+    ctx.fillStyle="#111";
+    ctx.fillRect(0,0,canvas.width,canvas.height);
+    drawSnow();
+
+    if(Math.random()<0.015) blocks.push({x:Math.floor(Math.random()*10)*40, y:-40, size:40});
+
+    for(let i=0;i<blocks.length;i++){
+        let b=blocks[i];
+        b.y+=blockSpeed;
+        ctx.fillStyle="red";
+        ctx.fillRect(b.x,b.y,b.size,b.size);
+
+        if(player.x<b.x+b.size && player.x+player.size>b.x &&
+           player.y<b.y+b.size && player.y+player.size>b.y){
+            dodgeGameOver=true;
+        }
+    }
+    blocks=blocks.filter(b=>b.y<canvas.height);
+
+    ctx.fillStyle="lime";
+    ctx.fillRect(player.x, player.y, player.size, player.size);
+
+    if(!dodgeGameOver){
+        score++;
+        scoreEl.textContent = score;
+        if(score>highScore){ highScore = score; localStorage.setItem("dodgeHighScore",highScore); highScoreEl.textContent = highScore; }
+    } else{
+        ctx.fillStyle="white";
+        ctx.font="36px Arial";
+        ctx.fillText("Game Over!",70,canvas.height/2);
+        return;
+    }
+
+    gameLoopId = requestAnimationFrame(loopDodge);
+}
+
+// ----------------- CATCH THE COINS -----------------
+let basket, coins, coinSpeed, catchGameOver;
+function initCatch(){
+    basket={x:180,y:360,width:50,height:20};
+    coins=[];
+    coinSpeed=2;
+    catchGameOver=false;
+
+    keyListener=function(e){
+        if(e.key==="ArrowLeft") basket.x -= 8;
+        if(e.key==="ArrowRight") basket.x += 8;
+        if(basket.x<0) basket.x=0;
+        if(basket.x>canvas.width-basket.width) basket.x=canvas.width-basket.width;
+    };
+    document.addEventListener("keydown", keyListener);
+
+    gameLoopId = requestAnimationFrame(loopCatch);
+}
+
+function loopCatch(){
+    if(currentGame!=='catch') return;
+    ctx.fillStyle="#111";
+    ctx.fillRect(0,0,canvas.width,canvas.height);
+    drawSnow();
+
+    if(Math.random()<0.015) coins.push({x:Math.random()*(canvas.width-20), y:-20, size:20});
+
+    for(let i=0;i<coins.length;i++){
+        let c = coins[i];
+        c.y += coinSpeed;
+        ctx.fillStyle="gold";
+        ctx.beginPath();
+        ctx.arc(c.x+c.size/2,c.y+c.size/2,c.size/2,0,Math.PI*2);
+        ctx.fill();
+
+        if(basket.x < c.x+c.size && basket.x+basket.width>c.x &&
+           basket.y < c.y+c.size && basket.y+basket.height>c.y){
+            score++; scoreEl.textContent=score;
+            coins.splice(i,1); i--;
+            if(score>highScore){ highScore=score; localStorage.setItem("catchHighScore",highScore); highScoreEl.textContent=highScore; }
+        }
+    }
+    coins = coins.filter(c=>c.y<canvas.height);
+
+    ctx.fillStyle="lime";
+    ctx.fillRect(basket.x, basket.y, basket.width, basket.height);
+
+    gameLoopId = requestAnimationFrame(loopCatch);
+}
+
+// ----------------- Start -----------------
+</script>
+</body>
+</html>
